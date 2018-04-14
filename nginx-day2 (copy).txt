@@ -1,0 +1,187 @@
+1 案例1：部署LNMP环境
+安装部署Nginx、MariaDB、PHP环境
+
+    安装部署Nginx、MariaDB、PHP、PHP-FPM；
+    启动Nginx、MariaDB、FPM服务；
+    并测试LNMP是否工作正常。
+
+    nginx
+    mariadb、mariadb-server、mariadb-devel
+    php、php-fpm、php-mysql
+
+步骤一：安装软件
+
+1）使用yum安装基础依赖包
+
+    [root@proxy ~]# yum -y install gcc openssl-devel pcre-devel zlib-devel
+
+2）源码安装Nginx
+
+    [root@proxy ~]# useradd –s /sbin/nologin  nginx
+    [root@proxy ~]# tar -zxvf nginx-1.12.2.tar.gz
+    [root@proxy ~]# cd nginx-1.12.2
+    [root@proxy nginx-1.12.2]# ./configure   \
+    > --prefix=/usr/local/nginx    \
+    > --user=nginx   --group=nginx \
+    > --with-http_ssl_module
+    [root@proxy ~]# make && make install
+    .. ..
+
+3）安装MariaDB
+
+Mariadb在新版RHEL7光盘中包含有该软件，配置yum源后可以直接使用yum安装：
+
+    [root@proxy ~]# yum –y install   mariadb   mariadb-server   mariadb-devel
+
+4）php和php-fpm(该软件包在lnmp_soft中提供)
+
+    [root@proxy ~]# yum –y  install  php   php-mysql
+    [root@proxy ~]# yum –y  localinstall php-fpm-5.4.16-42.el7.x86_64.rpm
+
+步骤二：启动服务
+
+1）启动Nginx服务
+
+这里需要注意的是，如果服务器上已经启动了其他监听80端口的服务软件（如httpd），则需要先关闭该服务，否则会出现冲突。
+
+2）启动MySQL服务
+3）启动PHP-FPM服务
+
+
+
+2 案例2：构建LNMP平台
+
+    [root@proxy etc]# vim /etc/php-fpm.d/www.conf
+    [www]
+    listen = 127.0.0.1:9000            //PHP端口号
+    pm.max_children = 32                //最大进程数量
+    pm.start_servers = 15                //最小进程数量
+    pm.min_spare_servers = 5            //最少需要几个空闲着的进程
+    pm.max_spare_servers = 32            //最多允许几个进程处于空闲状态
+
+步骤一：创建并修改php-fpm配置文件
+
+1）查看php-fpm配置文件
+
+    [root@proxy etc]# vim /etc/php-fpm.d/www.conf
+    [www]
+    listen = 127.0.0.1:9000
+    listen.allowed_clients = 127.0.0.1
+    user = apache
+    group = apache
+    pm = dynamic
+    pm.max_children = 50
+    pm.start_servers = 5
+    pm.min_spare_servers = 5
+    pm.max_spare_servers = 35
+
+步骤二：修改Nginx配置文件并启动服务
+
+    [root@proxy ~]# vim /usr/local/nginx/conf/nginx.conf
+    location / {
+                root   html;
+                index  index.php  index.html   index.htm;
+            }
+     location  ~  \.php$  {
+                root           html;
+                fastcgi_pass   127.0.0.1:9000;
+                fastcgi_index  index.php;
+                #fastcgi_param   SCRIPT_FILENAME  $document_root$fastcgi_script_name;
+                include        fastcgi.conf;
+            }
+    [root@proxy ~]# /usr/local/nginx/sbin/nginx -s reload
+
+步骤三：创建PHP页面，测试LNMP架构能否解析PHP页面
+
+
+3 案例3：地址重写
+
+关于Nginx服务器的地址重写，主要用到的配置参数是rewrite：
+rewrite regex replacement flag 
+
+1）修改Nginx服务配置：
+
+    [root@proxy ~]# vim /usr/local/nginx/conf/nginx.conf
+    .. ..
+    server {
+            listen       80;
+            server_name  localhost;
+    location / {
+        root   html;
+    index  index.html index.htm;
+    rewrite /a.html  /b.html;            
+    }
+    }
+
+
+2）重新加载配置文件
+
+    [root@proxy ~]# /usr/local/nginx/sbin/nginx  -s  reload
+
+
+1）修改Nginx服务配置：
+
+    [root@proxy ~]# vim /usr/local/nginx/conf/nginx.conf
+    .. ..
+    server {
+            listen       80;
+            server_name  localhost;
+    location / {
+        root   html;
+    index  index.html index.htm;
+    rewrite /a.html  /b.html  redirect;            
+    }
+    }
+重新加载配置文件
+步骤三：修改配置文件(访问192.168.4.5的请求重定向至www.tmooc.cn)
+
+1) 修改Nginx服务配置
+
+    [root@proxy ~]# vim /usr/local/nginx/conf/nginx.conf
+    .. ..
+    server {
+            listen       80;
+            server_name  localhost;
+    rewrite ^/ http://www.tmooc.cn/;
+    location / {
+        root   html;
+    index  index.html index.htm;
+    # rewrite /a.html  /b.html  redirect;
+    }
+    }
+
+
+步骤四：修改配置文件(访问192.168.4.5/下面子页面，重定向至www.tmooc.cn/下相同的页面)
+
+1) 修改Nginx服务配置
+
+    [root@proxy ~]# vim /usr/local/nginx/conf/nginx.conf
+    .. ..
+    server {
+            listen       80;
+            server_name  localhost;
+    rewrite ^/(.*) http://www.tmooc.cn/$1;
+    location / {
+        root   html;
+    index  index.html index.htm;
+    # rewrite /a.html  /b.html  redirect;
+    }
+    }
+
+步骤三：修改配置文件(实现curl和火狐访问相同链接返回的页面不同)
+
+1) 创建网页目录以及对应的页面文件：
+
+    [root@proxy ~]# echo "I am Normal page" > /usr/local/nginx/html/test.html
+    [root@proxy ~]# mkdir  -p  /usr/local/nginx/html/firefox/
+    [root@proxy ~]# echo "firefox page" > /usr/local/nginx/html/firefox/test.html
+
+步骤三：修改配置文件(实现curl和火狐访问相同链接返回的页面不同)
+
+1) 创建网页目录以及对应的页面文件：
+
+    [root@proxy ~]# echo "I am Normal page" > /usr/local/nginx/html/test.html
+    [root@proxy ~]# mkdir  -p  /usr/local/nginx/html/firefox/
+    [root@proxy ~]# echo "firefox page" > /usr/local/nginx/html/firefox/test.html
+
+
